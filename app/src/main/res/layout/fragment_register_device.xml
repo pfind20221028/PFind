@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/white"
+    android:backgroundTint="@color/white"
+    android:layout_margin="@dimen/fragment_vertical_margin"
+    android:id="@+id/register_devices_container"
+    tools:context=".ui.register.RegisterDeviceFragment"
+    >
+
+    <TextView
+        android:id="@+id/textView3"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignParentStart="true"
+        android:layout_alignParentTop="true"
+        android:layout_marginStart="25dp"
+        android:layout_marginTop="75dp"
+        android:text="Connect your pFind device"
+        android:textColor="@color/ash_gray"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/textView"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignParentStart="true"
+        android:layout_alignParentTop="true"
+        android:layout_marginStart="25dp"
+        android:layout_marginTop="31dp"
+        android:text="Turn on Device"
+        android:textColor="@color/baby_blue"
+        android:textSize="25sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/txt_ble_status"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_above="@+id/rv_ble"
+        android:layout_marginStart="89dp"
+        android:layout_marginEnd="87dp"
+        android:layout_marginBottom="75dp"
+        android:text="Click here to scan for the device"
+        android:textAlignment="center"
+        android:textColor="@color/ash_gray"
+        android:textStyle="bold"
+        tools:layout_editor_absoluteY="322dp" />
+
+    <ImageButton
+        android:id="@+id/img_scan_device"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_above="@+id/textView2"
+        android:layout_alignParentStart="true"
+        android:layout_alignParentTop="true"
+        android:layout_alignParentEnd="true"
+        android:layout_marginStart="136dp"
+        android:layout_marginTop="124dp"
+        android:layout_marginEnd="134dp"
+        android:layout_marginBottom="13dp"
+        android:background="@color/white"
+        android:contentDescription="scan button"
+        android:src="@mipmap/bluetooth" />
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/rv_ble"
+        android:layout_width="match_parent"
+        android:layout_height="300dp"
+        android:layout_alignParentBottom="true"
+        android:layout_marginBottom="0dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/textView2"
+        app:layout_constraintVertical_bias="0.243"
+        tools:layout_editor_absoluteX="0dp" />
+</RelativeLayout>

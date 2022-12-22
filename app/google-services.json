@@ -1,0 +1,68 @@
+{
+  "project_info": {
+    "project_number": "507893441968",
+    "project_id": "pfind-366910",
+    "storage_bucket": "pfind-366910.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:507893441968:android:cb8ed058c048bb7b0b6275",
+        "android_client_info": {
+          "package_name": "com.karl.Pfind"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "507893441968-32vbcoqglmqlruro3np8dlmm0bc1jji3.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDHYuQ79JEeQ7-qoMzUyBj6T0Yz9EtyP2Q"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "507893441968-32vbcoqglmqlruro3np8dlmm0bc1jji3.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:507893441968:android:953d8062f0128e460b6275",
+        "android_client_info": {
+          "package_name": "com.karl.pfind"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "507893441968-32vbcoqglmqlruro3np8dlmm0bc1jji3.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDHYuQ79JEeQ7-qoMzUyBj6T0Yz9EtyP2Q"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "507893441968-32vbcoqglmqlruro3np8dlmm0bc1jji3.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
