@@ -11,4 +11,6 @@ public interface NotificationEndpoint {
     @Headers({"Accept: application/json"})
     @POST("send-notification")
     Call<String> triggerLostPet(@Query("token") String token, @Query("topic") String topic, @Body Note dataModal);
+
+
 }

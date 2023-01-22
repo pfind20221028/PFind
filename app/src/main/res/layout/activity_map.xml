@@ -55,7 +55,7 @@
                             android:layout_height="wrap_content"
                             android:src="@drawable/male_user_30"
                             android:layout_margin="10dp"
-                            android:layout_gravity="start |center"
+                            android:layout_gravity="start | center"
                             android:contentDescription="ble" />
 
                         <androidx.appcompat.widget.LinearLayoutCompat

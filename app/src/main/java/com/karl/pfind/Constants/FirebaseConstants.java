@@ -9,11 +9,10 @@ public class FirebaseConstants {
     public final static String ACTION_MISSING = "action_missing";
     public final static String ACTION_FOUND = "action_found";
 
-    //Local server
-    //public static final String BASE_URL = "http://192.168.0.18:8080/";
-    //public static final String BASE_URL = "http://192.168.89.55:8080/";
 
-    //pu
+    //Local server
+    //public static final String BASE_URL = "http://192.168.110.55:8080/";
+    //Public server
     public static final String BASE_URL = "https://pfind-be.herokuapp.com/";
 
 }

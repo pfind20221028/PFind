@@ -18,15 +18,14 @@ import android.util.Log;
 
 import java.io.UnsupportedEncodingException;
 import java.util.List;
-import java.util.concurrent.TimeUnit;
 
 
 /**
  * Service for managing connection and data communication with a GATT server hosted on a
  * given Bluetooth LE device.
  */
-public class BluetoothLeService extends Service {
-    private final static String TAG = BluetoothLeService.class.getSimpleName();
+public class BluetoothLeActivityService extends Service {
+    private final static String TAG = BluetoothLeActivityService.class.getSimpleName();
 
     private BluetoothManager mBluetoothManager;
     private BluetoothAdapter mBluetoothAdapter;
@@ -69,6 +68,8 @@ public class BluetoothLeService extends Service {
             "com.example.bluetooth.le.ACTION_DATA_AVAILABLE";
     public final static String EXTRA_DATA =
             "com.example.bluetooth.le.EXTRA_DATA";
+//    public final static UUID UUID_HEART_RATE_MEASUREMENT =
+//            UUID.fromString(SampleGattAttributes.HEART_RATE_MEASUREMENT);
 
     // Implements callback methods for GATT events that the app cares about.  For example,
     // connection change and services discovered.
@@ -86,23 +87,19 @@ public class BluetoothLeService extends Service {
                 if(mBluetoothGatt.discoverServices())
                 {
                     Log.i(TAG, "Attempting to start service discovery:");
-                    isDiscoveringServices = false;
+
                 }
                 else{
                     Log.i(TAG, "Attempting to start service discovery:not success");
-                    isDiscoveringServices = true;
-                    retryGattDiscovery();
+
                 }
 
-                //Test
-                isSearchingForDevice = false;
 
             } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
-                //intentAction = ACTION_GATT_DISCONNECTED;
-                //mConnectionState = STATE_DISCONNECTED;
-                //Log.i(TAG, "Disconnected from GATT server.");
-                //broadcastUpdate(intentAction);
-                retryGattConnect();
+                intentAction = ACTION_GATT_DISCONNECTED;
+                mConnectionState = STATE_DISCONNECTED;
+                Log.i(TAG, "Disconnected from GATT server.");
+                broadcastUpdate(intentAction);
             }
         }
 
@@ -271,7 +268,7 @@ public class BluetoothLeService extends Service {
         @Override
         public void onCharacteristicChanged(BluetoothGatt gatt,
                                             BluetoothGattCharacteristic characteristic) {
-            //System.out.println("onCharacteristicChanged  "+new String(characteristic.getValue()));
+            System.out.println("onCharacteristicChanged  "+new String(characteristic.getValue()));
             broadcastUpdate(ACTION_DATA_AVAILABLE, characteristic);
         }
     };
@@ -284,7 +281,7 @@ public class BluetoothLeService extends Service {
     private void broadcastUpdate(final String action,
                                  final BluetoothGattCharacteristic characteristic) {
         final Intent intent = new Intent(action);
-        //System.out.println("BluetoothLeService broadcastUpdate");
+        System.out.println("BluetoothLeActivityService broadcastUpdate");
         // This is special handling for the Heart Rate Measurement profile.  Data parsing is
         // carried out as per profile specifications:
         // http://developer.bluetooth.org/gatt/characteristics/Pages/CharacteristicViewer.aspx?u=org.bluetooth.characteristic.heart_rate_measurement.xml
@@ -312,8 +309,8 @@ public class BluetoothLeService extends Service {
     }
 
     public class LocalBinder extends Binder {
-        BluetoothLeService getService() {
-            return BluetoothLeService.this;
+        BluetoothLeActivityService getService() {
+            return BluetoothLeActivityService.this;
         }
     }
 
@@ -341,7 +338,7 @@ public class BluetoothLeService extends Service {
     public boolean initialize() {
         // For API level 18 and above, get a reference to BluetoothAdapter through
         // BluetoothManager.
-        System.out.println("BluetoothLeService initialize"+mBluetoothManager);
+        System.out.println("BluetoothLeActivityService initialize"+mBluetoothManager);
         if (mBluetoothManager == null) {
             mBluetoothManager = (BluetoothManager) getSystemService(Context.BLUETOOTH_SERVICE);
             if (mBluetoothManager == null) {
@@ -370,7 +367,7 @@ public class BluetoothLeService extends Service {
      *         callback.
      */
     public boolean connect(final String address) {
-        System.out.println("BluetoothLeService connect"+address+mBluetoothGatt);
+        System.out.println("BluetoothLeActivityService connect"+address+mBluetoothGatt);
         if (mBluetoothAdapter == null || address == null) {
             Log.w(TAG, "BluetoothAdapter not initialized or unspecified address.");
             return false;
@@ -390,119 +387,22 @@ public class BluetoothLeService extends Service {
 //            }
 //        }
 
-        //final BluetoothDevice device = getRemoteDevice(address);
         final BluetoothDevice device = mBluetoothAdapter.getRemoteDevice(address);
         if (device == null) {
             Log.w(TAG, "Device not found.  Unable to connect.");
             return false;
         }
-
-        //Test
-        bleDevice = device;
-        isSearchingForDevice = true;
-
         // We want to directly connect to the device, so we are setting the autoConnect
         // parameter to false.
         System.out.println("device.connectGatt connect");
         synchronized(this)
         {
             mBluetoothGatt = device.connectGatt(this, false, mGattCallback);
-            //mBluetoothGatt = connectGatt(device);
         }
         Log.d(TAG, "Trying to create a new connection.");
         mBluetoothDeviceAddress = address;
         mConnectionState = STATE_CONNECTING;
         return true;
-    }
-
-    private final static int
-            RETRY_COUNT = 10,
-            RETRY_TIMEOUT = 6;
-
-    private Boolean isSearchingForDevice = false,isDiscoveringServices = false;
-    private BluetoothDevice bleDevice;
-
-    public void stopRetries() {
-        isSearchingForDevice = false;
-        isDiscoveringServices = false;
-    }
-
-    private void retryGattDiscovery () {
-        if(isDiscoveringServices) {
-
-            try {
-                TimeUnit.SECONDS.sleep(RETRY_TIMEOUT);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-                isDiscoveringServices = false;
-                return;
-            }
-
-            Log.i(TAG, "Retry Attempting to start service discovery:not success");
-            mBluetoothGatt.discoverServices();
-        }
-    }
-
-    private void retryGattConnect() {
-
-        if(isSearchingForDevice) {
-
-            try {
-                TimeUnit.SECONDS.sleep(RETRY_TIMEOUT);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-                isSearchingForDevice = false;
-                return;
-            }
-
-            synchronized(this)
-            {
-                mBluetoothGatt = bleDevice.connectGatt(this, false, mGattCallback);
-            }
-            Log.d(TAG, "Retrying to create a new connection.");
-            mConnectionState = STATE_CONNECTING;
-        }
-    }
-
-    private BluetoothGatt connectGatt() {
-        BluetoothGatt bluetoothGatt = null;
-
-        for(int i = 0; i < RETRY_COUNT; i++) {
-            try {
-                TimeUnit.SECONDS.sleep(RETRY_TIMEOUT);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-                return null;
-            }
-            bluetoothGatt = bleDevice.connectGatt(this, false, mGattCallback);
-
-            System.out.println("YYY COUNTER " + i);
-
-            if(bluetoothGatt != null)
-                break;
-        }
-
-        return bluetoothGatt;
-    }
-
-    private BluetoothDevice getRemoteDevice(String address) {
-        BluetoothDevice bluetoothDevice = null;
-
-        for(int i = 0; i < RETRY_COUNT; i++) {
-            try {
-                TimeUnit.SECONDS.sleep(RETRY_TIMEOUT);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-                return null;
-            }
-            bluetoothDevice = mBluetoothAdapter.getRemoteDevice(address);
-            System.out.println("XXX COUNTER " + i);
-
-            if(bluetoothDevice != null)
-                break;
-        }
-
-        return bluetoothDevice;
     }
 
     /**
@@ -512,7 +412,7 @@ public class BluetoothLeService extends Service {
      * callback.
      */
     public void disconnect() {
-        System.out.println("BluetoothLeService disconnect");
+        System.out.println("BluetoothLeActivityService disconnect");
         if (mBluetoothAdapter == null || mBluetoothGatt == null) {
             Log.w(TAG, "BluetoothAdapter not initialized");
             return;
@@ -525,7 +425,7 @@ public class BluetoothLeService extends Service {
      * released properly.
      */
     public void close() {
-        System.out.println("BluetoothLeService close");
+        System.out.println("BluetoothLeActivityService close");
         if (mBluetoothGatt == null) {
             return;
         }
@@ -625,4 +525,3 @@ public class BluetoothLeService extends Service {
 
 
 }
-

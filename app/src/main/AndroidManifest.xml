@@ -71,6 +71,10 @@
             android:enabled="true"/>
 
         <service
+            android:name="com.karl.pfind.bluno.BluetoothLeActivityService"
+            android:enabled="true"/>
+
+        <service
             android:name="com.karl.pfind.Services.MyFirebaseMessagingService"
             android:exported="false">
             <intent-filter>

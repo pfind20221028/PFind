@@ -138,8 +138,11 @@ public abstract class BlunoLibraryService extends Service {
             }
         }
 
-
-        mainContext.registerReceiver(mGattUpdateReceiver, makeGattUpdateIntentFilter());
+        try {
+            mainContext.registerReceiver(mGattUpdateReceiver, makeGattUpdateIntentFilter());
+        } catch (Exception e) {
+          e.printStackTrace();
+        }
     }
 
 
@@ -208,7 +211,7 @@ public abstract class BlunoLibraryService extends Service {
         @Override
         public void onReceive(Context context, Intent intent) {
             final String action = intent.getAction();
-            log.info("mGattUpdateReceiver->onReceive->action=" + action);
+            //log.info("mGattUpdateReceiver->onReceive->action=" + action);
             if (BluetoothLeService.ACTION_GATT_CONNECTED.equals(action)) {
                 mConnected = true;
                 mHandler.removeCallbacks(mConnectingOverTimeRunnable);
@@ -241,7 +244,8 @@ public abstract class BlunoLibraryService extends Service {
                         onConectionStateChange(mConnectionState);
 
                     } else {
-                        Toast.makeText(mainContext, "Please select DFRobot devices", Toast.LENGTH_SHORT).show();
+                        //Toast.makeText(mainContext, "Please select DFRobot devices", Toast.LENGTH_SHORT).show();
+                        log.info("Please select DFRobot devices");
                         mConnectionState = connectionStateEnum.isToScan;
                         onConectionStateChange(mConnectionState);
                     }
@@ -249,15 +253,8 @@ public abstract class BlunoLibraryService extends Service {
                     onSerialReceived(intent.getStringExtra(BluetoothLeService.EXTRA_DATA));
                 }
 
-                String s = "displayData " + intent.getStringExtra(BluetoothLeService.EXTRA_DATA);
-
-                log.info(s);
-
-//            	mPlainProtocol.mReceivedframe.append(intent.getStringExtra(BluetoothLeService.EXTRA_DATA)) ;
-//            	System.out.print("mPlainProtocol.mReceivedframe:");
-//            	log.info(mPlainProtocol.mReceivedframe.toString());
-
-
+                //String s = "displayData " + intent.getStringExtra(BluetoothLeService.EXTRA_DATA);
+                //log.info(s);
             }
         }
     };
@@ -282,8 +279,6 @@ public abstract class BlunoLibraryService extends Service {
             case isConnected:
                 mBluetoothLeService.disconnect();
                 mHandler.postDelayed(mDisonnectingOverTimeRunnable, 10000);
-
-//			mBluetoothLeService.close();
                 mConnectionState = connectionStateEnum.isDisconnecting;
                 onConectionStateChange(mConnectionState);
                 break;
@@ -373,7 +368,8 @@ public abstract class BlunoLibraryService extends Service {
         }
 
         if (mModelNumberCharacteristic == null || mSerialPortCharacteristic == null || mCommandCharacteristic == null) {
-            Toast.makeText(mainContext, "Please select DFRobot devices", Toast.LENGTH_SHORT).show();
+            //Toast.makeText(mainContext, "Please select DFRobot devices", Toast.LENGTH_SHORT).show();
+            log.info("Please select DFRobot devices");
             mConnectionState = connectionStateEnum.isToScan;
             onConectionStateChange(mConnectionState);
         } else {
@@ -400,12 +396,22 @@ public abstract class BlunoLibraryService extends Service {
             mConnectionState = connectionStateEnum.isConnecting;
             onConectionStateChange(mConnectionState);
             /*Delay for 10 seconds, if still connecting after 10 secs disconnect*/
-            mHandler.postDelayed(mConnectingOverTimeRunnable, 100000);
+            mHandler.postDelayed(mConnectingOverTimeRunnable, 600000);
         } else {
             Log.d(TAG, "Connect request fail");
             mConnectionState = connectionStateEnum.isToScan;
             onConectionStateChange(mConnectionState);
         }
     }
+
+    protected void disconnectDeviceManually() {
+        mBluetoothLeService.stopRetries();
+
+        mBluetoothLeService.disconnect();
+        mHandler.postDelayed(mDisonnectingOverTimeRunnable, 10000);
+        mConnectionState = connectionStateEnum.isDisconnecting;
+        onConectionStateChange(mConnectionState);
+    }
+
 
 }

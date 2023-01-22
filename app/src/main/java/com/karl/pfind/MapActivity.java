@@ -2,12 +2,16 @@ package com.karl.pfind;
 
 import static com.karl.Pfind.Constants.GPSConstants.ACCESS_FINE_LOCATION;
 import static com.karl.Pfind.Constants.GPSConstants.ZOOM_LEVEL;
+import static com.karl.Pfind.Constants.GPSConstants.markerRefreshRatePerSecond;
 import static com.karl.pfind.BroadcastReceiver.BroadcastConstants.NOTIFICATION_BROADCAST_ACTION;
 import static com.karl.pfind.Constants.FirebaseConstants.ACTION_FOUND;
 import static com.karl.pfind.Constants.FirebaseConstants.ACTION_MISSING;
 import static com.karl.pfind.Constants.FirebaseConstants.MISSING_DEVICES_TOPIC;
 import static com.karl.pfind.ui.login.LoginConstants.SUCCESS;
 
+import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
 import android.app.ProgressDialog;
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -15,8 +19,8 @@ import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.location.Location;
+import android.os.Build;
 import android.os.Bundle;
-import android.os.Handler;
 import android.os.Looper;
 import android.view.View;
 import android.widget.ImageView;
@@ -27,6 +31,8 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
 import androidx.cardview.widget.CardView;
+import androidx.core.app.NotificationCompat;
+import androidx.core.content.ContextCompat;
 import androidx.lifecycle.ViewModelProvider;
 import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 
@@ -53,8 +59,8 @@ import com.karl.pfind.Models.CustomLocation;
 import com.karl.pfind.Models.PFindDevice;
 import com.karl.pfind.Permissions.PermissionChecker;
 import com.karl.pfind.Services.MissingDeviceConnectorService;
+import com.karl.pfind.Utils.BluetoothUtils;
 import com.karl.pfind.bluno.BlunoLibrary;
-import com.karl.pfind.bluno.TestBleService;
 import com.karl.pfind.http.Note;
 import com.karl.pfind.http.NotificationEndpoint;
 import com.karl.pfind.ui.login.LoginViewModel;
@@ -62,6 +68,7 @@ import com.karl.pfind.ui.register.BleDevice;
 
 import java.util.HashMap;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
 
 import retrofit2.Call;
@@ -77,7 +84,7 @@ public class MapActivity extends BlunoLibrary implements OnMapReadyCallback {
     private CardView buttonScan,cv_missing_pet_info,buttonMissing;
     private ImageView imgLogout;
     private TextView ui_logger,txt_ble_status,tv_missing_pet_message,
-                        tv_account_info,txt_acc_email,txt_acc_role;
+            tv_account_info,txt_acc_email,txt_acc_role;
 
     private GoogleMap mMap;
 
@@ -87,8 +94,9 @@ public class MapActivity extends BlunoLibrary implements OnMapReadyCallback {
     private Marker hostMarker,targetMarker,missingDeviceMarker;
     private Location host,target,missingDevice;
     private Boolean isMapReady = false,
-                    panToUserOnce = false,
-                    isDeviceConnected = false;
+            panToUserOnce = false,
+            isDeviceConnected = false,
+            isDeviceMissing = false;
 
     private LoginViewModel loginViewModel;
     private String deviceMacAddress,missingDeviceMacAddress;
@@ -100,6 +108,13 @@ public class MapActivity extends BlunoLibrary implements OnMapReadyCallback {
     private FirebaseUser user;
 
     private ProgressDialog dialog;
+
+    private BitmapDescriptor targetIcon,missingIcon,hostIcon;
+    private Long timeLastMarkedGps;
+
+    private BluetoothUtils bluetoothUtils;
+
+
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -120,6 +135,7 @@ public class MapActivity extends BlunoLibrary implements OnMapReadyCallback {
         setUpMissingPetFoundReceiver();
         setUpAccountInfo();
         showLoadingScreen(false);
+        buttonScan.setVisibility(View.VISIBLE);
     }
 
     private void showLoadingScreen(Boolean b) {
@@ -170,15 +186,17 @@ public class MapActivity extends BlunoLibrary implements OnMapReadyCallback {
     private void setupBle() {
         dialog.setMessage("Setting up Bluetooth. Please wait...");
 
+        bluetoothUtils = BluetoothUtils.getInstance();
+
         request(1000, new OnPermissionsResult() {
             @Override
             public void OnSuccess() {
-                toast("Permission request successful");
+                toastShort("Permission request successful");
             }
 
             @Override
             public void OnFail(List<String> noPermissions) {
-                toast("Permission request failed");
+                toastShort("Permission request failed");
             }
         });
 
@@ -220,7 +238,7 @@ public class MapActivity extends BlunoLibrary implements OnMapReadyCallback {
 
     private void panCameraToUserLocation() {
         if(host == null) {
-            toast("Please wait before a user finds the device");
+            toastShort("Please wait before a user finds the device");
             return;
         }
         LatLng t = new LatLng(host.getLatitude(),host.getLongitude());
@@ -228,9 +246,9 @@ public class MapActivity extends BlunoLibrary implements OnMapReadyCallback {
     }
 
     private void initViews() {
-        buttonScan = (CardView) findViewById(R.id.cv_scan);					//initial the button for scanning the BLE device
-        cv_missing_pet_info = (CardView) findViewById(R.id.cv_missing_pet_info);					//initial the button for scanning the BLE device
-        buttonMissing = (CardView) findViewById(R.id.buttonMissing);					//initial the button for scanning the BLE device
+        buttonScan = (CardView) findViewById(R.id.cv_scan);
+        cv_missing_pet_info = (CardView) findViewById(R.id.cv_missing_pet_info);
+        buttonMissing = (CardView) findViewById(R.id.buttonMissing);
         ui_logger = (  TextView) findViewById(R.id.ui_logger);
         txt_ble_status = (TextView) findViewById(R.id.txt_ble_status);
         tv_account_info = (TextView) findViewById(R.id.tv_account_info);
@@ -246,8 +264,14 @@ public class MapActivity extends BlunoLibrary implements OnMapReadyCallback {
 
             @Override
             public void onClick(View v) {
-                //buttonScanOnClickProcess();
-                connectToBleDevice(deviceMacAddress);
+
+                if(!bluetoothUtils.isBluetoothOpen()) {
+                    toastShort("Please turn on your Bluetooth");
+                } else if (isDeviceConnected) {
+                    toastShort("Device is still connected");
+                } else {
+                    connectToBleDevice(deviceMacAddress);
+                }
             }
         });
 
@@ -286,8 +310,9 @@ public class MapActivity extends BlunoLibrary implements OnMapReadyCallback {
                         .setCancelable(false)
                         .setPositiveButton("Yes", new DialogInterface.OnClickListener() {
                             public void onClick(DialogInterface dialog, int id) {
+                                cv_missing_pet_info.setVisibility(View.GONE);
                                 triggerNotificationsApi();
-                                toast("Notification success!");
+                                toastShort("Notifying users near last location.");
                             }
                         })
                         .setNegativeButton("No", new DialogInterface.OnClickListener() {
@@ -305,14 +330,23 @@ public class MapActivity extends BlunoLibrary implements OnMapReadyCallback {
         cv_missing_pet_info.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                panCameraToMissingDeviceLocation();
+                panCameraToTargetLocation();
             }
         });
     }
 
+    private void panCameraToTargetLocation() {
+        if(target == null) {
+            toastShort("Please wait before a user finds the device");
+            return;
+        }
+        LatLng t = new LatLng(target.getLatitude(),target.getLongitude());
+        mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(t, ZOOM_LEVEL));
+    }
+
     private void panCameraToMissingDeviceLocation() {
         if(missingDevice == null) {
-            toast("Please wait before a user finds the device");
+            toastShort("Please wait before a user finds the device");
             return;
         }
         LatLng t = new LatLng(missingDevice.getLatitude(),missingDevice.getLongitude());
@@ -326,6 +360,10 @@ public class MapActivity extends BlunoLibrary implements OnMapReadyCallback {
                 .findFragmentById(R.id.pet_map);
         assert mapFragment != null;
         mapFragment.getMapAsync(this);
+
+        targetIcon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE);
+        missingIcon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN);
+        hostIcon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_RED);
     }
 
     private void retrieveFirebaseToken() {
@@ -347,6 +385,7 @@ public class MapActivity extends BlunoLibrary implements OnMapReadyCallback {
 
                 });
 
+        if(deviceMacAddress == null)
         FirebaseMessaging.getInstance().subscribeToTopic(MISSING_DEVICES_TOPIC)
                 .addOnCompleteListener(new OnCompleteListener<Void>() {
                     @Override
@@ -381,7 +420,7 @@ public class MapActivity extends BlunoLibrary implements OnMapReadyCallback {
                 missingDevice.setLatitude(customLocation.getLatitude());
                 missingDevice.setLongitude(customLocation.getLongitude());
 
-                checkDistanceFromMissingDevice();
+                showDeviceIsFoundButton(true);
                 setMarkers();
             }
         };
@@ -399,7 +438,7 @@ public class MapActivity extends BlunoLibrary implements OnMapReadyCallback {
                 String action = intent.getStringExtra("action");
                 String owner = intent.getStringExtra("owner_uid");
                 if(action.equals(ACTION_FOUND)
-                        //&& owner.equals(user.getUid())
+                    && owner.equals(user.getUid())
                 ) {
 
                     String macAddress = intent.getStringExtra("mac_address");
@@ -408,12 +447,18 @@ public class MapActivity extends BlunoLibrary implements OnMapReadyCallback {
 
                     missingDeviceMacAddress = macAddress;
 
+                    /*
                     missingDevice = missingDevice == null ? new Location("missingDevice") : missingDevice;
                     missingDevice.setLatitude(customLocation.getLatitude());
-                    missingDevice.setLongitude(customLocation.getLongitude());
+                    missingDevice.setLongitude(customLocation.getLongitude());*/
 
-                    checkDistanceFromMissingDevice();
+                    target = target == null ? new Location("Your pet") : target;
+                    target.setLatitude(customLocation.getLatitude());
+                    target.setLongitude(customLocation.getLongitude());
+
+                    showDeviceIsFoundButton(true);
                     setMarkers();
+                    showNotification("Pet found!","Your device was found by a user.");
                 }
             }
         };
@@ -491,22 +536,27 @@ public class MapActivity extends BlunoLibrary implements OnMapReadyCallback {
     }
 
     public void onDeviceDisconnected() {
-        buttonMissing.setVisibility(View.VISIBLE);
+        if(isDeviceConnected) {
+            buttonMissing.setVisibility(View.VISIBLE);
+            buttonMissing.setCardBackgroundColor(ContextCompat.getColor(this, R.color.danger));
+            isDeviceConnected = false;
+            isDeviceMissing = true;
+
+            showNotification("Pet is lost!","Your device was disconnected!");
+        }
     }
 
     @Override
     public void onConectionStateChange(connectionStateEnum theConnectionState) {//Once connection state changes, this function will be called
         switch (theConnectionState) {											//Four connection state
             case isConnected:
-                isDeviceConnected = true;
                 txt_ble_status.setText("Connected");
                 break;
             case isConnecting:
                 txt_ble_status.setText("Connecting");
                 break;
             case isToScan:
-                if(isDeviceConnected)
-                    onDeviceDisconnected();
+                onDeviceDisconnected();
                 txt_ble_status.setText("Scan");
                 break;
             case isScanning:
@@ -521,50 +571,60 @@ public class MapActivity extends BlunoLibrary implements OnMapReadyCallback {
     }
 
     @Override
-    public void onSerialReceived(String theString) {							//Once connection data received, this function will be called
+    public void onSerialReceived(String theString) {
+
+        isDeviceConnected = true;
 
         try {
-            if(theString.equals("INVALID LOCATION")) {
 
+            if(theString.equals("INVALID LOCATION")) {
                 return;
             }
 
             if(theString.length() == 20) {
 
-                //if(isSearchingForMissingDevice) {
-                //    missingDevice = missingDevice == null ? new Location("Missing Device") : missingDevice;
-                //} else {
-                    target = target == null ? new Location("Your pet") : target;
-                //}
+                target = target == null ? new Location("Your pet") : target;
 
                 String[] locString = theString.split(",", 2);
 
                 String lat = locString[0].replace("\"", "");
                 String lng = locString[1].replace("\"", "");
 
-                Double dlat = Double.parseDouble(lat);
-                Double dlng = Double.parseDouble(lng);
+                double dlat = Double.parseDouble(lat);
+                double dlng = Double.parseDouble(lng);
 
-                //if(isSearchingForMissingDevice) {
-                //    missingDevice.setLatitude(dlat);
-                //    missingDevice.setLongitude(dlng);
-                //} else {
+                if(isDeviceMissing) {
+                    onDeviceFound(dlat,dlng);
+                } else {
                     target.setLatitude(dlat);
                     target.setLongitude(dlng);
-                //}
+                }
 
-                ui_logger.setText(ui_logger.getText() + theString + "\n");
-                mMap.animateCamera(
-                        CameraUpdateFactory.newLatLngZoom(
-                                new LatLng(dlat,dlng),
-                                ZOOM_LEVEL)
-                );
+                //ui_logger.setText(ui_logger.getText() + theString + "\n");
+
                 setMarkers();
             }
-        } catch (IndexOutOfBoundsException e) {
-            e.printStackTrace();
+        } catch (IndexOutOfBoundsException | NumberFormatException e) {
+            log.info("Malformed string received: " + theString);
         }
+    }
 
+    private void onDeviceFound(Double dlat,Double dlng) {
+
+        missingDevice = missingDevice == null ? new Location("missingDevice") : missingDevice;
+        missingDevice.setLatitude(dlat);
+        missingDevice.setLongitude(dlng);
+
+        buttonMissing.setCardBackgroundColor(ContextCompat.getColor(this, R.color.success));
+
+        target = null;
+        if(targetMarker != null) {
+            targetMarker.remove();
+        }
+        targetMarker = null;
+
+        showDeviceIsFoundButton(false);
+        buttonMissing.setVisibility(View.GONE);
     }
 
     @Override
@@ -586,25 +646,31 @@ public class MapActivity extends BlunoLibrary implements OnMapReadyCallback {
         isMapReady = true;
     }
 
-    private void toast(String s) {
+    private void toastShort(String s) {
+        Toast.makeText(this,s,Toast.LENGTH_SHORT).show();
+    }
+
+    private void toastLong(String s) {
         Toast.makeText(this,s,Toast.LENGTH_LONG).show();
     }
 
-    private void checkDistanceFromMissingDevice() {
+    private void showDeviceIsFoundButton(Boolean b) {
 
         if(host == null)
-            toast("Could not retrieve host device location.");
+            toastShort("Could not retrieve your device's location.");
 
-        cv_missing_pet_info.setVisibility(View.VISIBLE);
-        //tv_missing_pet_message.setText("A missing pet is near your location. (" + host.distanceTo(missingDevice)+ " meters)");
-        //connectToBleDevice(missingDeviceMacAddress);
+        cv_missing_pet_info.setVisibility(b ? View.VISIBLE : View.GONE);
     }
 
     private void setMarkers() {
 
-        BitmapDescriptor targetIcon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE);
-        BitmapDescriptor missingIcon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN);
-        BitmapDescriptor hostIcon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_RED);
+        if(timeLastMarkedGps != null) {
+            if(TimeUnit.SECONDS.convert(System.nanoTime() - timeLastMarkedGps, TimeUnit.NANOSECONDS) < markerRefreshRatePerSecond)
+                return;
+        }
+
+        timeLastMarkedGps = System.nanoTime();
+        log.info("Set Marker");
 
         if(isMapReady) {
 
@@ -615,11 +681,17 @@ public class MapActivity extends BlunoLibrary implements OnMapReadyCallback {
                 MarkerOptions tmo = new MarkerOptions();
                 tmo.title("Your Pet");
                 tmo.position(t);
-                //tmo.icon(BitmapDescriptorFactory.fromResource(R.drawable.dog_walking_48px));
                 tmo.icon(targetIcon);
                 tmo.draggable(false);
                 targetMarker = mMap.addMarker(tmo);
-                /*mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(t, ZOOM_LEVEL));*/
+
+                /*mMap.animateCamera(
+                        CameraUpdateFactory.newLatLngZoom(
+                                new LatLng(target.getLatitude(),target.getLongitude()),
+                                ZOOM_LEVEL)
+                );
+                mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(t, ZOOM_LEVEL));
+                */
             }
 
             if(missingDevice != null) {
@@ -632,7 +704,13 @@ public class MapActivity extends BlunoLibrary implements OnMapReadyCallback {
                 tmo.draggable(false);
                 tmo.icon(missingIcon);
                 missingDeviceMarker = mMap.addMarker(tmo);
-                /*mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(t, ZOOM_LEVEL));*/
+
+                //Remove target marker
+                /*target = null;
+                if(targetMarker != null) {
+                    targetMarker.remove();
+                }
+                targetMarker = null;*/
             }
 
             if(host != null) {
@@ -644,7 +722,6 @@ public class MapActivity extends BlunoLibrary implements OnMapReadyCallback {
                 tmo.position(t);
                 tmo.draggable(false);
                 tmo.icon(hostIcon);
-                //tmo.icon(BitmapDescriptorFactory.fromResource(R.drawable.pet_owner_48px));
                 hostMarker = mMap.addMarker(tmo);
                 //mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(t, ZOOM_LEVEL));
             }
@@ -656,7 +733,7 @@ public class MapActivity extends BlunoLibrary implements OnMapReadyCallback {
 
         //TODO
         if(target == null) {
-            toast("Pet's last location is not set.");
+            toastShort("Pet's last location is not set.");
             return;
         }
 
@@ -719,4 +796,38 @@ public class MapActivity extends BlunoLibrary implements OnMapReadyCallback {
         AlertDialog alert = builder.create();
         alert.show();
     }
+
+    private void showNotification(String title,String body) {
+
+        NotificationManager mNotificationManager;
+
+        NotificationCompat.Builder mBuilder = new NotificationCompat.Builder(this, "notify_001");
+
+        NotificationCompat.BigTextStyle bigText = new NotificationCompat.BigTextStyle();
+        bigText.setBigContentTitle(title);
+        bigText.setSummaryText(body);
+
+        mBuilder.setSmallIcon(R.drawable.missing_dog_64);
+        mBuilder.setContentTitle(title);
+        mBuilder.setContentText(body);
+        mBuilder.setPriority(Notification.PRIORITY_MAX);
+        mBuilder.setStyle(bigText);
+
+        mNotificationManager =
+                (NotificationManager) this.getSystemService(Context.NOTIFICATION_SERVICE);
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+        {
+            String channelId = "Your_channel_id";
+            NotificationChannel channel = new NotificationChannel(
+                    channelId,
+                    "Channel human readable title",
+                    NotificationManager.IMPORTANCE_HIGH);
+            mNotificationManager.createNotificationChannel(channel);
+            mBuilder.setChannelId(channelId);
+        }
+
+        mNotificationManager.notify(0, mBuilder.build());
+    }
+
 }
